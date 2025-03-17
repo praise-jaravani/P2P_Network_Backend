@@ -8,6 +8,8 @@ import time
 import logging
 from typing import List, Dict, Optional
 import json
+from fastapi.responses import StreamingResponse
+import io
 
 # Import core modules with your working paths
 from core.p2p_client import P2PClient
@@ -274,6 +276,34 @@ async def configure_client(data: dict):
         "local_tracker": start_local_tracker,
         "connection_verified": connection_verified
     }
+    
+@app.get("/api/files/{filename}")
+async def download_file(filename: str):
+    """Stream a file for browser download"""
+    if not leecher:
+        raise HTTPException(status_code=503, detail="P2P client not initialized")
+    
+    # Check if file exists in downloaded files
+    file_path = os.path.join(FILES_DIR, filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail=f"File {filename} not found")
+    
+    # Create a file-like object to stream the file
+    def iterfile():
+        with open(file_path, "rb") as file:
+            yield from file
+    
+    # Set appropriate headers for browser download
+    headers = {
+        "Content-Disposition": f"attachment; filename={filename}"
+    }
+    
+    # Return streaming response
+    return StreamingResponse(
+        iterfile(),
+        media_type="application/octet-stream",
+        headers=headers
+    )
 
 def get_system_status():
     """Get the system status for API and WebSocket responses"""
